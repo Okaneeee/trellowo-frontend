@@ -40,7 +40,7 @@ export default function Layout() {
 
         {/* Logo */}
         <div className="h-20 flex items-center justify-center border-b border-gray-800">
-          <h1 className={`font-bold transition-all ${isSidebarOpen ? 'text-2xl' : 'text-sm'} overflow-hidden whitespace-nowrap`}>
+          <h1 className={`font-bold transition-all ${isSidebarOpen ? 'text-2xl' : 'text-xl'} overflow-hidden whitespace-nowrap`}>
             {isSidebarOpen ? <>Trell<span className="text-blue-500">OwO</span></> : <span className="text-blue-500">OwO</span>}
           </h1>
         </div>

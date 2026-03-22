@@ -1,7 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'; // VS Code dark theme
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks'; // Fixes carriage returns
+import rehypeRaw from 'rehype-raw'; // Allows HTML like <u>
+import rehypeSlug from 'rehype-slug'; // Adds IDs to headers for the ToC
 import api from '../api';
 
 export default function Project() {
@@ -52,10 +57,13 @@ export default function Project() {
     }
   };
 
-  // Smart Paste Functionality (Text selection + URL = Markdown Link)
+  const handleCancelEdit = () => {
+    setContent(project.content); // Revert to last saved
+    setIsEditing(false);
+  };
+
   const handlePaste = (e) => {
     const pastedText = e.clipboardData.getData('text');
-    // Check if what they pasted is a URL
     const isUrl = /^https?:\/\//.test(pastedText); 
     
     if (isUrl) {
@@ -63,13 +71,13 @@ export default function Project() {
       const start = textarea.selectionStart;
       const end = textarea.selectionEnd;
       
-      // If text is highlighted
       if (start !== end) {
-        e.preventDefault(); // Stop normal paste
+        e.preventDefault();
         const selectedText = content.substring(start, end);
-        // Format it: [selected text](url)
-        const newText = `${content.substring(0, start)}[${selectedText}](${pastedText})${content.substring(end)}`;
-        setContent(newText);
+        const markdownLink = `[${selectedText}](${pastedText})`;
+        
+        // Deprecated but still the only way to manipulate textarea selections while keeping Ctrl+Z stack intact
+        document.execCommand('insertText', false, markdownLink);
       }
     }
   };
@@ -85,27 +93,62 @@ export default function Project() {
     
     while ((match = headerRegex.exec(project.content)) !== null) {
       toc.push({
-        level: match[1].length, // Number of # symbols
+        level: match[1].length,
         text: match[2],
-        // Create an ID-friendly string (lowercase & replace spaces with hyphens)
-        id: match[2].toLowerCase().replace(/\s+/g, '-')
+        id: match[2].toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')
       });
     }
     return toc;
   }, [project?.content]);
 
-  if (isLoading) {
-    return <div className="p-8 text-gray-400 animate-pulse text-xl">Loading workspace...</div>;
-  }
+  // Custom renderer for code blocks to add the "Copy" button
+  const MarkdownComponents = {
+    code({ node, className, children, ...props }) {
+      const match = /language-(\w+)/.exec(className || '');
+      const codeString = String(children).replace(/\n$/, '');
+      
+      // If there is no language and no newlines, it's inline code!
+      const isInline = !match && !codeString.includes('\n');
+
+      if (isInline) {
+        return (
+          <code className="bg-[#2a2a2a] text-[#ce9178] px-1.5 py-0.5 rounded text-sm font-mono" {...props}>
+            {children}
+          </code>
+        );
+      }
+
+      // Otherwise, it's a full block of code
+      return (
+        <div className="relative group">
+          <button
+            onClick={() => navigator.clipboard.writeText(codeString)}
+            className="absolute right-2 top-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10"
+          >
+            Copy
+          </button>
+          <SyntaxHighlighter
+            style={vscDarkPlus}
+            language={match ? match[1] : 'text'}
+            PreTag="div"
+            className="rounded-lg border border-gray-800 !m-0 !bg-[#1a1a1a]"
+          >
+            {codeString}
+          </SyntaxHighlighter>
+        </div>
+      );
+    }
+  };
+
+  if (isLoading) return <div className="p-8 text-gray-400 animate-pulse text-xl">Loading workspace...</div>;
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#121212] text-white overflow-y-auto">
+    <div className="min-h-full flex flex-col bg-[#121212] text-white">
       
-      {/* Header Area */}
-      <div className="flex-none p-6 border-b border-gray-800 bg-[#1a1a1a]">
+      {/* STICKY HEADER */}
+      <div className="sticky top-0 z-20 flex-none p-6 border-b border-gray-800 bg-[#1a1a1a]/95 backdrop-blur-sm shadow-md">
         <div className="max-w-7xl mx-auto flex justify-between items-start">
           <div>
-            {/* Title Renaming Logic */}
             {isRenaming ? (
               <div className="flex items-center gap-3">
                 <input 
@@ -115,68 +158,56 @@ export default function Project() {
                   className="bg-[#2a2a2a] text-3xl font-bold border border-blue-500 rounded px-2 py-1 focus:outline-none"
                   autoFocus
                 />
-                <button 
-                  onClick={() => handleSave({ title: newTitle })}
-                  className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded font-bold text-sm"
-                >
-                  Save
-                </button>
-                <button 
-                  onClick={() => { setIsRenaming(false); setNewTitle(project.title); }}
-                  className="text-gray-400 hover:text-white"
-                >
-                  Cancel
-                </button>
+                <button onClick={() => handleSave({ title: newTitle })} className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded font-bold text-sm">Save</button>
+                <button onClick={() => { setIsRenaming(false); setNewTitle(project.title); }} className="text-gray-400 hover:text-white">Cancel</button>
               </div>
             ) : (
-              <div className="flex items-center gap-3 group">
+              <div className="flex items-center gap-4">
                 <h1 className="text-3xl font-bold">{project.title}</h1>
                 <button 
                   onClick={() => setIsRenaming(true)}
-                  className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-blue-400 transition-opacity"
-                  title="Rename Project"
+                  className="bg-[#2a2a2a] hover:bg-gray-700 text-xs px-3 py-1.5 rounded text-gray-300 font-semibold transition-colors flex items-center gap-2"
                 >
-                  ✏️
+                  Rename
                 </button>
               </div>
             )}
             
-            <p className="text-gray-500 text-sm mt-1">
+            <p className="text-gray-500 text-sm mt-2">
               Workspace · Last updated: {new Date(project.updated_at).toLocaleString()}
             </p>
           </div>
           
-          {/* Big Kanban Button */}
           <button 
             onClick={() => navigate(`/kanban/${project.id}`)}
             className="bg-[#1e1e1e] border border-green-500/50 hover:border-green-500 hover:bg-green-500/10 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:shadow-green-500/20 transition-all flex items-center gap-3"
           >
-            <span className="text-xl">📋</span>
-            Go to Kanban Board
+            <span className="text-xl">📋</span> Go to Kanban Board
           </button>
         </div>
       </div>
 
-      {/* Main Workspace Layout */}
-      <div className="flex-1 max-w-7xl w-full mx-auto flex gap-8 p-6">
+      {/* WORKSPACE AREA */}
+      <div className="flex-1 max-w-7xl w-full mx-auto flex gap-8 p-6 relative">
         
-        {/* LEFT PANEL: Markdown Editor */}
-        <div className="flex-1 flex flex-col bg-[#161616] rounded-lg border border-gray-800 shadow-xl overflow-hidden">
+        {/* LEFT PANEL */}
+        <div className="flex-1 flex flex-col bg-[#161616] rounded-lg border border-gray-800 shadow-xl overflow-hidden mb-12">
           <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-[#1e1e1e]">
-            <h2 className="font-semibold flex items-center gap-2">
-              <span>📝</span> Project Notes
-            </h2>
-            <button
-              onClick={() => isEditing ? handleSave({ content }) : setIsEditing(true)}
-              disabled={isSaving}
-              className={`px-4 py-1.5 rounded text-sm font-bold transition-colors ${
-                isEditing 
-                  ? 'bg-green-600 hover:bg-green-700 text-white' 
-                  : 'bg-[#2a2a2a] hover:bg-gray-700 text-gray-300'
-              }`}
-            >
-              {isSaving ? 'Saving...' : isEditing ? 'Save' : 'Edit'}
-            </button>
+            <h2 className="font-semibold flex items-center gap-2"><span>📝</span> Project Notes</h2>
+            <div className="flex gap-2">
+              {isEditing && (
+                <button onClick={handleCancelEdit} className="px-4 py-1.5 rounded text-sm font-bold bg-[#2a2a2a] hover:bg-gray-700 text-gray-300 transition-colors">
+                  Cancel
+                </button>
+              )}
+              <button
+                onClick={() => isEditing ? handleSave({ content }) : setIsEditing(true)}
+                disabled={isSaving}
+                className={`px-4 py-1.5 rounded text-sm font-bold transition-colors ${isEditing ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+              >
+                {isSaving ? 'Saving...' : isEditing ? 'Save Content' : 'Edit Content'}
+              </button>
+            </div>
           </div>
           
           <div className="flex-1 p-6 min-h-[600px]">
@@ -185,41 +216,59 @@ export default function Project() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onPaste={handlePaste}
-                className="w-full h-full min-h-[500px] bg-[#1a1a1a] text-gray-200 border border-gray-700 rounded p-4 focus:outline-none focus:border-blue-500 resize-none font-mono text-sm leading-relaxed"
-                placeholder="Write your markdown here... (Try highlighting text and pasting a link!)"
+                className="w-full h-full min-h-[600px] bg-[#1a1a1a] text-gray-200 border border-gray-700 rounded p-4 focus:outline-none focus:border-blue-500 resize-none font-mono text-sm leading-relaxed"
+                placeholder="Write your markdown here..."
               />
             ) : (
-              <div className="prose prose-invert max-w-none prose-a:text-blue-400 prose-headings:text-white prose-code:bg-[#2a2a2a] prose-code:px-1 prose-code:rounded prose-pre:bg-[#1a1a1a] prose-pre:border prose-pre:border-gray-800">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {project.content || '*No notes added yet. Click Edit to start typing!*'}
+              <div className="prose prose-invert max-w-none 
+                prose-p:my-3 prose-p:leading-relaxed 
+                prose-headings:mt-4 prose-headings:mb-2 prose-headings:scroll-mt-32
+                prose-a:text-blue-400 
+                prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none
+                prose-ol:my-2 prose-ul:my-2 prose-li:my-0
+                prose-blockquote:my-3 prose-pre:my-0"
+              >
+                <ReactMarkdown 
+                  remarkPlugins={[remarkGfm, remarkBreaks]} 
+                  rehypePlugins={[rehypeRaw, rehypeSlug]}
+                  components={MarkdownComponents}
+                >
+                  {(project.content || '*No notes added yet. Click Edit Content to start typing!*')
+                    .replace(/\r\n/g, '\n') /* Normalize classic line endings */
+                    .replace(/\n{3,}/g, match => '\n\n' + '&nbsp;\n\n'.repeat(match.length - 2)) /* Safely preserve large gaps */
+                  }
                 </ReactMarkdown>
               </div>
             )}
           </div>
         </div>
 
-        {/* RIGHT PANEL: Sticky Table of Contents */}
+        {/* RIGHT PANEL: STICKY TOC */}
         <div className="w-64 flex-none hidden lg:block">
-          <div className="sticky top-6 bg-[#161616] rounded-lg border border-gray-800 p-6 shadow-xl">
+          <div className="sticky top-32 bg-[#161616] rounded-lg border border-gray-800 p-6 shadow-xl max-h-[calc(100vh-160px)] overflow-y-auto">
             <h3 className="text-xl font-bold mb-4 border-b border-gray-800 pb-2">Table of Contents</h3>
             
             {tableOfContents.length > 0 ? (
-              <ul className="space-y-2 text-sm text-gray-400">
+              <ul className="space-y-3 text-sm text-gray-400">
                 {tableOfContents.map((item, index) => (
-                  <li 
-                    key={index} 
-                    style={{ marginLeft: `${(item.level - 1) * 12}px` }}
-                    className="hover:text-blue-400 cursor-pointer transition-colors"
-                  >
-                    {item.text}
+                  <li key={index} style={{ marginLeft: `${(item.level - 1) * 12}px` }}>
+                    <a 
+                      href={`#${item.id}`} 
+                      className="hover:text-blue-400 transition-colors block"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                    >
+                      {item.text}
+                    </a>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-gray-600 text-sm italic">
-                Add # Headings to your notes to generate a table of contents.
-              </p>
+              <p className="text-gray-600 text-sm italic">Add # Headings to generate a ToC.</p>
             )}
+
           </div>
         </div>
 

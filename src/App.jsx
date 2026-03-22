@@ -3,6 +3,7 @@ import Login from './pages/Login';
 import Home from './pages/Home';
 import Projects from './pages/Projects';
 import Project from './pages/Project';
+import Kanban from './pages/Kanban';
 import Layout from './components/Layout';
 
 // Bouncer
@@ -23,7 +24,10 @@ function App() {
           {/* These will appear inside the <Outlet /> of the Layout */}
           <Route path="/home" element={<Home />} />
           <Route path="/projects" element={<Projects />} />
-          
+
+          {/* Dynamic route for individual Kanban board */}
+          <Route path="/kanban/:id" element={<Kanban />} />
+
           {/* Dynamic route for individual projects */}
           <Route path="/project/:id" element={<Project />} />
         </Route>

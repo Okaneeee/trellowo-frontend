@@ -46,16 +46,27 @@ export default function Layout() {
         </div>
 
         {/* Navigation Links */}
-        <nav className="flex-1 py-6 flex flex-col gap-2">
-          <button onClick={() => navigate('/home')} className={`p-4 text-left font-semibold transition-colors flex items-center gap-4 ${isActive('/home')}`}>
+<nav className="flex-1 py-6 flex flex-col gap-2">
+          <button 
+            onClick={() => navigate('/home')} 
+            className={`py-4 font-semibold transition-colors flex items-center ${isSidebarOpen ? 'justify-start px-6 gap-4' : 'justify-center'} ${isActive('/home')}`}
+          >
             <span className="text-xl">🏠</span> 
             {isSidebarOpen && <span>Home</span>}
           </button>
-          <button onClick={() => navigate('/projects')} className={`p-4 text-left font-semibold transition-colors flex items-center gap-4 ${isActive('/projects')}`}>
+          
+          <button 
+            onClick={() => navigate('/projects')} 
+            className={`py-4 font-semibold transition-colors flex items-center ${isSidebarOpen ? 'justify-start px-6 gap-4' : 'justify-center'} ${isActive('/projects')}`}
+          >
             <span className="text-xl">📁</span> 
             {isSidebarOpen && <span>Projects</span>}
           </button>
-          <button onClick={() => navigate('/kanbans')} className={`p-4 text-left font-semibold transition-colors flex items-center gap-4 ${isActive('/kanbans')}`}>
+          
+          <button 
+            onClick={() => navigate('/kanbans')} 
+            className={`py-4 font-semibold transition-colors flex items-center ${isSidebarOpen ? 'justify-start px-6 gap-4' : 'justify-center'} ${isActive('/kanbans')}`}
+          >
             <span className="text-xl">📋</span> 
             {isSidebarOpen && <span>Kanbans</span>}
           </button>

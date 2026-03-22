@@ -1,16 +1,13 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Home from './pages/Home';
+import Projects from './pages/Projects';
+import Layout from './components/Layout';
 
-// Bouncer wraps around pages that require the user to be logged in
+// Bouncer
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem('token');
-  
-  if (!token) {
-    // If there is no token, kick them back to the root/login page
-    return <Navigate to="/" replace />;
-  }
-  
+  if (!token) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -20,15 +17,12 @@ function App() {
       <Routes>
         <Route path="/" element={<Login />} />
         
-        {/* The home page is protected by our bouncer */}
-        <Route 
-          path="/home" 
-          element={
-            <ProtectedRoute>
-              <Home />
-            </ProtectedRoute>
-          } 
-        />
+        {/* We wrap all protected routes inside the Layout component */}
+        <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+          {/* These will appear inside the <Outlet /> of the Layout */}
+          <Route path="/home" element={<Home />} />
+          <Route path="/projects" element={<Projects />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   );

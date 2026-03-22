@@ -16,7 +16,7 @@ export default function Layout() {
   const isActive = (path) => location.pathname === path ? 'bg-blue-600/20 text-blue-500 border-r-4 border-blue-500' : 'text-gray-400 hover:bg-[#2a2a2a] hover:text-white';
 
   return (
-    <div className="flex min-h-screen bg-[#121212] text-white">
+    <div className="flex h-screen bg-[#121212] text-white overflow-hidden">
       
       {/* SIDEBAR */}
       <div 

@@ -101,43 +101,46 @@ export default function Project() {
     return toc;
   }, [project?.content]);
 
+  // Mini component to handle the copy button state for each code block
+  const CodeBlock = ({ node, className, children, ...props }) => {
+    const [copied, setCopied] = useState(false);
+    const match = /language-(\w+)/.exec(className || '');
+    const codeString = String(children).replace(/\n$/, '');
+    const isInline = !match && !codeString.includes('\n');
+
+    if (isInline) {
+      return <code className="bg-[#2a2a2a] text-[#ce9178] px-1.5 py-0.5 rounded text-sm font-mono" {...props}>{children}</code>;
+    }
+
+    const handleCopy = () => {
+      navigator.clipboard.writeText(codeString);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000); // Reset after 2 seconds!
+    };
+
+    return (
+      <div className="relative group mt-4 mb-4">
+        <button
+          onClick={handleCopy}
+          className="absolute right-2 top-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 w-16 text-center"
+        >
+          {copied ? 'Copied!' : 'Copy'}
+        </button>
+        <SyntaxHighlighter
+          style={vscDarkPlus}
+          language={match ? match[1] : 'text'}
+          PreTag="div"
+          className="rounded-lg border border-gray-800 !m-0 !bg-[#1a1a1a]"
+        >
+          {codeString}
+        </SyntaxHighlighter>
+      </div>
+    );
+  };
+
   // Custom renderer for code blocks to add the "Copy" button
   const MarkdownComponents = {
-    code({ node, className, children, ...props }) {
-      const match = /language-(\w+)/.exec(className || '');
-      const codeString = String(children).replace(/\n$/, '');
-      
-      // If there is no language and no newlines, it's inline code!
-      const isInline = !match && !codeString.includes('\n');
-
-      if (isInline) {
-        return (
-          <code className="bg-[#2a2a2a] text-[#ce9178] px-1.5 py-0.5 rounded text-sm font-mono" {...props}>
-            {children}
-          </code>
-        );
-      }
-
-      // Otherwise, it's a full block of code
-      return (
-        <div className="relative group">
-          <button
-            onClick={() => navigator.clipboard.writeText(codeString)}
-            className="absolute right-2 top-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10"
-          >
-            Copy
-          </button>
-          <SyntaxHighlighter
-            style={vscDarkPlus}
-            language={match ? match[1] : 'text'}
-            PreTag="div"
-            className="rounded-lg border border-gray-800 !m-0 !bg-[#1a1a1a]"
-          >
-            {codeString}
-          </SyntaxHighlighter>
-        </div>
-      );
-    }
+    code: CodeBlock
   };
 
   if (isLoading) return <div className="p-8 text-gray-400 animate-pulse text-xl">Loading workspace...</div>;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import api from '../api';
@@ -11,9 +11,26 @@ export default function Kanban() {
   const [tasks, setTasks] = useState({}); 
   const [isLoading, setIsLoading] = useState(true);
 
+  // New states for adding items
+  const [isAddingColumn, setIsAddingColumn] = useState(false);
+  const [newColumnName, setNewColumnName] = useState('');
+  
+  const [addingTaskToCol, setAddingTaskToCol] = useState(null);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+
+  // Refs to auto-focus inputs when they appear
+  const newColumnInputRef = useRef(null);
+  const newTaskInputRef = useRef(null);
+
   useEffect(() => {
     fetchBoardData();
   }, [projectId]);
+
+  // Auto-focus logic
+  useEffect(() => {
+    if (isAddingColumn && newColumnInputRef.current) newColumnInputRef.current.focus();
+    if (addingTaskToCol && newTaskInputRef.current) newTaskInputRef.current.focus();
+  }, [isAddingColumn, addingTaskToCol]);
 
   const fetchBoardData = async () => {
     try {
@@ -49,6 +66,48 @@ export default function Kanban() {
     }
   };
 
+  // --- ADD COLUMN ---
+  const handleAddColumn = async (e) => {
+    e.preventDefault();
+    if (!newColumnName.trim()) return;
+
+    try {
+      const res = await api.post('/columns', { 
+        name: newColumnName, 
+        kanban_id: board.id 
+      });
+      // Update UI instantly
+      setBoard({ ...board, columns: [...board.columns, res.data] });
+      setTasks({ ...tasks, [res.data.id]: [] }); // Initialize empty task array
+      setNewColumnName('');
+      setIsAddingColumn(false);
+    } catch (err) {
+      console.error('Error adding column:', err);
+    }
+  };
+
+  // --- ADD TASK ---
+  const handleAddTask = async (e, columnId) => {
+    e.preventDefault();
+    if (!newTaskTitle.trim()) return;
+
+    try {
+      const res = await api.post('/tasks', { 
+        title: newTaskTitle, 
+        column_id: columnId 
+      });
+      
+      // Update UI instantly
+      const currentTasks = tasks[columnId] || [];
+      setTasks({ ...tasks, [columnId]: [...currentTasks, res.data] });
+      
+      setNewTaskTitle('');
+      setAddingTaskToCol(null);
+    } catch (err) {
+      console.error('Error adding task:', err);
+    }
+  };
+
   const onDragEnd = async (result) => {
     const { destination, source, draggableId, type } = result;
 
@@ -79,7 +138,6 @@ export default function Kanban() {
       const sourceColId = parseInt(source.droppableId.replace('col-', ''));
       const destColId = parseInt(destination.droppableId.replace('col-', ''));
 
-      // FIX: Safely separate state mutation for same-column vs different-column dragging!
       if (sourceColId === destColId) {
         const newColTasks = Array.from(tasks[sourceColId]);
         const [movedTask] = newColTasks.splice(source.index, 1);
@@ -140,7 +198,6 @@ export default function Kanban() {
         <DragDropContext onDragEnd={onDragEnd}>
           <Droppable droppableId="board" type="COLUMN" direction="horizontal">
             {(provided) => (
-              // FIX: Removed 'gap-6' and 'items-start'. Let the columns stretch full height natively!
               <div ref={provided.innerRef} {...provided.droppableProps} className="flex h-full items-stretch">
                 
                 {board.columns.map((column, index) => (
@@ -149,7 +206,6 @@ export default function Kanban() {
                       <div 
                         ref={provided.innerRef}
                         {...provided.draggableProps}
-                        // FIX: Added 'h-full' and 'mr-6' (margin-right replaces gap)
                         className={`w-80 flex-none flex flex-col bg-[#161616] rounded-lg border ${snapshot.isDragging ? 'border-green-500 shadow-xl' : 'border-gray-800'} h-full mr-6`}
                       >
                         
@@ -170,7 +226,6 @@ export default function Kanban() {
                             <div 
                               ref={provided.innerRef}
                               {...provided.droppableProps}
-                              // FIX: flex-1 makes this background stretch all the way to the Add Card button!
                               className={`flex-1 p-3 overflow-y-auto ${snapshot.isDraggingOver ? 'bg-[#1a1a1a]' : ''}`}
                             >
                               {tasks[column.id]?.map((task, taskIndex) => (
@@ -195,11 +250,45 @@ export default function Kanban() {
                           )}
                         </Droppable>
                         
-                        {/* Quick Add Task Button */}
+                        {/* Dynamic Add Task Section */}
                         <div className="p-3 border-t border-gray-800 bg-[#1e1e1e] rounded-b-lg flex-none">
-                          <button className="w-full text-left text-gray-400 hover:text-white hover:bg-[#2a2a2a] p-2 rounded transition-colors text-sm font-semibold flex items-center gap-2">
-                            <span>+</span> Add a card
-                          </button>
+                          {addingTaskToCol === column.id ? (
+                            <form onSubmit={(e) => handleAddTask(e, column.id)} className="flex flex-col gap-2">
+                              <textarea 
+                                ref={newTaskInputRef}
+                                value={newTaskTitle}
+                                onChange={(e) => setNewTaskTitle(e.target.value)}
+                                placeholder="Enter a title for this card..."
+                                className="w-full bg-[#2a2a2a] text-white border border-blue-500 rounded p-2 focus:outline-none resize-none text-sm"
+                                rows={2}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleAddTask(e, column.id);
+                                  }
+                                }}
+                              />
+                              <div className="flex gap-2 items-center">
+                                <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm font-bold transition-colors">
+                                  Add card
+                                </button>
+                                <button 
+                                  type="button" 
+                                  onClick={() => { setAddingTaskToCol(null); setNewTaskTitle(''); }}
+                                  className="text-gray-400 hover:text-white text-xl font-bold px-2"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            </form>
+                          ) : (
+                            <button 
+                              onClick={() => setAddingTaskToCol(column.id)}
+                              className="w-full text-left text-gray-400 hover:text-white hover:bg-[#2a2a2a] p-2 rounded transition-colors text-sm font-semibold flex items-center gap-2"
+                            >
+                              <span>+</span> Add a card
+                            </button>
+                          )}
                         </div>
 
                       </div>
@@ -208,10 +297,41 @@ export default function Kanban() {
                 ))}
                 {provided.placeholder}
                 
-                {/* Add Column Button */}
-                <div className="w-80 flex-none h-12 bg-[#1e1e1e]/50 border border-gray-800 border-dashed rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:border-gray-500 cursor-pointer transition-colors">
-                  + Add another list
-                </div>
+                {/* Dynamic Add Column Section */}
+                {isAddingColumn ? (
+                  <form 
+                    onSubmit={handleAddColumn} 
+                    className="w-80 flex-none bg-[#161616] p-3 rounded-lg border border-blue-500 flex flex-col gap-2 h-fit"
+                  >
+                    <input 
+                      ref={newColumnInputRef}
+                      type="text" 
+                      value={newColumnName}
+                      onChange={(e) => setNewColumnName(e.target.value)}
+                      placeholder="Enter list title..."
+                      className="w-full bg-[#2a2a2a] text-white border border-gray-700 rounded p-2 focus:outline-none text-sm font-semibold"
+                    />
+                    <div className="flex gap-2 items-center">
+                      <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm font-bold transition-colors">
+                        Add list
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => { setIsAddingColumn(false); setNewColumnName(''); }}
+                        className="text-gray-400 hover:text-white text-xl font-bold px-2"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div 
+                    onClick={() => setIsAddingColumn(true)}
+                    className="w-80 flex-none h-12 bg-[#1e1e1e]/50 border border-gray-800 border-dashed rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:border-gray-500 hover:bg-[#1e1e1e] cursor-pointer transition-colors font-semibold"
+                  >
+                    + Add another list
+                  </div>
+                )}
 
               </div>
             )}

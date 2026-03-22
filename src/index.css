@@ -6,3 +6,42 @@ body {
   background-color: #121212;
   color: #ffffff;
 }
+
+/* ========================================== */
+/*          CUSTOM SCROLLBAR STYLING          */
+/* ========================================== */
+
+/* Firefox */
+* {
+  scrollbar-width: auto;
+  scrollbar-color: #3f3f46 #121212; /* thumb color | track color */
+}
+
+/* WebKit (Chromium browsers) */
+::-webkit-scrollbar {
+  width: 10px; /* Width of vertical scrollbar */
+  height: 10px; /* Height of horizontal scrollbar */
+}
+
+/* The track (background) */
+::-webkit-scrollbar-track {
+  background: #121212; 
+  border-radius: 5px;
+}
+
+/* The draggable thumb */
+::-webkit-scrollbar-thumb {
+  background: #3f3f46; /* Tailwind's zinc-700 */
+  border-radius: 5px;
+  border: 2px solid #121212; /* Creates a nice padding effect */
+}
+
+/* Hover state for the thumb */
+::-webkit-scrollbar-thumb:hover {
+  background: #52525b; /* Tailwind's zinc-600 */
+}
+
+/* Corner where horizontal and vertical scrollbars meet */
+::-webkit-scrollbar-corner {
+  background: #121212;
+}
